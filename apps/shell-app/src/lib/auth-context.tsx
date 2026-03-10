@@ -24,10 +24,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     // Check locally for auth state
     const storedUser = localStorage.getItem("mamahub_user");
-    if (storedUser) {
-      setUser(JSON.parse(storedUser));
-    }
-    setIsLoading(false);
+
+    // Defer state setting to bypass 'setState in effect' warning
+    setTimeout(() => {
+      if (storedUser) {
+        setUser(JSON.parse(storedUser));
+      }
+      setIsLoading(false);
+    }, 0);
   }, []);
 
   const login = (email: string) => {

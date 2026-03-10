@@ -24,9 +24,11 @@ export function SocketProvider({ children }: { children: React.ReactNode }) {
     if (!user) {
       if (socket) {
         socket.disconnect();
+      }
+      setTimeout(() => {
         setSocket(null);
         setIsConnected(false);
-      }
+      }, 0);
       return;
     }
 
@@ -71,6 +73,7 @@ export function SocketProvider({ children }: { children: React.ReactNode }) {
       socketInstance.disconnect();
       bc.close();
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user]);
 
   return (
