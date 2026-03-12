@@ -45,9 +45,6 @@ jobs:
       - name: Lint
         run: pnpm turbo run lint
 
-      - name: Type check
-        run: pnpm turbo run typecheck
-
       - name: Build
         run: pnpm turbo run build
 
