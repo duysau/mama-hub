@@ -69,7 +69,7 @@ export default function Income() {
           Income Tracking
         </h1>
         <p className="text-slate-500 mt-1">
-          Manage all your revenue streams and salary in one place
+          Manage all your revenue streams and salary in one place.
         </p>
       </header>
 
