@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Inter } from "next/font/google";
 import "./globals.css";
 import Shell from "@/components/layout/Shell";
+import { FinanceProvider } from "@/context/FinanceContext";
 
 const inter = Inter({
   variable: "--font-inter",
@@ -22,7 +23,9 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body className={`${inter.variable} antialiased font-sans`}>
-        <Shell>{children}</Shell>
+        <FinanceProvider>
+          <Shell>{children}</Shell>
+        </FinanceProvider>
       </body>
     </html>
   );

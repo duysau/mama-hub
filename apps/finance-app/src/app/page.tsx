@@ -1,8 +1,11 @@
 "use client";
 
+import { useMemo } from "react";
 import { Wallet, TrendingUp, TrendingDown } from "lucide-react";
 import clsx from "clsx";
 import MetricCard from "@/components/ui/MetricCard";
+import { useFinance } from "@/hooks/useFinance";
+import { formatCurrency, EXPENSE_CATEGORIES } from "@/lib/finance";
 import {
   AreaChart,
   Area,
@@ -16,30 +19,66 @@ import {
   Cell,
 } from "recharts";
 
-const spendingData = [
-  { name: "May", amount: 2800 },
-  { name: "Jun", amount: 3100 },
-  { name: "Jul", amount: 2900 },
-  { name: "Aug", amount: 3500 },
-  { name: "Sep", amount: 3050 },
-  { name: "Oct", amount: 3200 },
-];
-
-const categoryData = [
-  { name: "Housing", value: 1500, color: "#3b82f6" },
-  { name: "Food", value: 650, color: "#22c55e" },
-  { name: "Transport", value: 420, color: "#f59e0b" },
-  { name: "Other", value: 300, color: "#a855f7" },
-  { name: "Utilities", value: 200, color: "#94a3b8" },
-];
-
-const recentTransactions = [
-  { id: 1, merchant: "Netflix Subscription", icon: "NF", category: "Entertainment", date: "Oct 24, 2023", amount: -15.99, amountColor: "text-red-600", categoryColor: "bg-purple-100 text-purple-700" },
-  { id: 2, merchant: "Amazon Purchase", icon: "AM", category: "Shopping", date: "Oct 22, 2023", amount: -84.50, amountColor: "text-red-600", categoryColor: "bg-blue-100 text-blue-700" },
-  { id: 3, merchant: "Company Salary", icon: "CO", category: "Income", date: "Oct 20, 2023", amount: 4200.00, amountColor: "text-green-600", categoryColor: "bg-green-100 text-green-700" },
-];
-
 export default function Home() {
+  const { incomes, expenses } = useFinance();
+
+  // Aggregate Data
+  const totalIncome = useMemo(() => incomes.reduce((sum, item) => sum + item.amount, 0), [incomes]);
+  const totalExpenses = useMemo(() => expenses.reduce((sum, item) => sum + item.amount, 0), [expenses]);
+  const totalBalance = totalIncome - totalExpenses;
+
+  // Recent Activity (Limit to 5)
+  const recentTransactions = useMemo(() => {
+    const combined = [
+      ...incomes.map(i => ({ 
+        id: i.id, 
+        merchant: i.name, 
+        icon: "IN", 
+        category: i.category, 
+        amount: i.amount, 
+        type: "income" as const,
+        timestamp: i.createdAt
+      })),
+      ...expenses.map(e => ({ 
+        id: e.id, 
+        merchant: e.description, 
+        icon: "EX", 
+        category: e.category, 
+        amount: e.amount, 
+        type: "expense" as const,
+        timestamp: e.createdAt || new Date(e.date).getTime()
+      })),
+    ];
+    
+    return combined
+      .sort((a, b) => b.timestamp - a.timestamp)
+      .slice(0, 5);
+  }, [incomes, expenses]);
+
+  // Category Chart Data
+  const categoryData = useMemo(() => {
+    const counts: Record<string, number> = {};
+    expenses.forEach(e => {
+      counts[e.category] = (counts[e.category] || 0) + e.amount;
+    });
+
+    return EXPENSE_CATEGORIES.map(cat => ({
+      name: cat.name,
+      value: counts[cat.name] || 0,
+      color: cat.bg.split('-')[1] === 'blue' ? '#3b82f6' : 
+             cat.bg.split('-')[1] === 'green' ? '#22c55e' : 
+             cat.bg.split('-')[1] === 'purple' ? '#f59e0b' : 
+             cat.bg.split('-')[1] === 'amber' ? '#a855f7' : '#94a3b8'
+    })).filter(c => c.value > 0);
+  }, [expenses]);
+
+  // Simple Spending Trends (Last 6 entries if available)
+  const spendingData = useMemo(() => {
+    if (expenses.length === 0) return [{ name: "Current", amount: 0 }];
+    const sorted = [...expenses].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+    return sorted.slice(-6).map(e => ({ name: e.date.split('-')[2], amount: e.amount }));
+  }, [expenses]);
+
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-6">
       
@@ -47,24 +86,24 @@ export default function Home() {
       <section className="grid grid-cols-1 md:grid-cols-3 gap-6">
         <MetricCard
           title="Total Balance"
-          value="$45,280.00"
-          trend="+2.5%"
-          trendDirection="up"
+          value={formatCurrency(totalBalance)}
+          trend="Lifetime"
+          trendDirection="neutral"
           icon={<Wallet className="w-5 h-5 text-blue-600" />}
           colorTheme="blue"
         />
         <MetricCard
-          title="Monthly Income"
-          value="$8,450.00"
-          trend="vs last month"
-          trendDirection="neutral"
+          title="Total Income"
+          value={formatCurrency(totalIncome)}
+          trend="All time"
+          trendDirection="up"
           icon={<TrendingUp className="w-5 h-5 text-green-600" />}
           colorTheme="green"
         />
         <MetricCard
-          title="Monthly Expenses"
-          value="$3,210.50"
-          trend="+12%"
+          title="Total Expenses"
+          value={formatCurrency(totalExpenses)}
+          trend="All time"
           trendDirection="down"
           icon={<TrendingDown className="w-5 h-5 text-red-600" />}
           colorTheme="red"
@@ -77,8 +116,8 @@ export default function Home() {
         {/* Spending Trends */}
         <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200 lg:col-span-2">
           <div className="flex justify-between items-center mb-6">
-            <h2 className="text-lg font-semibold text-slate-800">Spending Trends (6 Months)</h2>
-            <span className="text-xs font-medium text-blue-700 bg-blue-100 px-3 py-1 rounded-full">Current</span>
+            <h2 className="text-lg font-semibold text-slate-800">Recent Spending</h2>
+            <span className="text-xs font-medium text-blue-700 bg-blue-100 px-3 py-1 rounded-full">Actual</span>
           </div>
           <div className="h-80 w-full">
             <ResponsiveContainer width="100%" height="100%">
@@ -128,29 +167,33 @@ export default function Home() {
         <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
           <h2 className="text-lg font-semibold text-slate-800 mb-6">Expense Categories</h2>
           <div className="h-56 relative flex justify-center items-center">
-            <ResponsiveContainer width="100%" height="100%">
-              <PieChart>
-                <Pie
-                  data={categoryData}
-                  cx="50%"
-                  cy="50%"
-                  innerRadius={65}
-                  outerRadius={90}
-                  paddingAngle={0}
-                  dataKey="value"
-                  stroke="none"
-                >
-                  {categoryData.map((entry, index) => (
-                    <Cell key={`cell-${index}`} fill={entry.color} />
-                  ))}
-                </Pie>
-                <Tooltip 
-                  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                  formatter={(value: any) => [`$${value}`, '']}
-                  contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
-                />
-              </PieChart>
-            </ResponsiveContainer>
+            {categoryData.length > 0 ? (
+              <ResponsiveContainer width="100%" height="100%">
+                <PieChart>
+                  <Pie
+                    data={categoryData}
+                    cx="50%"
+                    cy="50%"
+                    innerRadius={65}
+                    outerRadius={90}
+                    paddingAngle={0}
+                    dataKey="value"
+                    stroke="none"
+                  >
+                    {categoryData.map((entry, index) => (
+                      <Cell key={`cell-${index}`} fill={entry.color} />
+                    ))}
+                  </Pie>
+                  <Tooltip 
+                    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                    formatter={(value: any) => [`$${value}`, '']}
+                    contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
+                  />
+                </PieChart>
+              </ResponsiveContainer>
+            ) : (
+              <div className="text-slate-400 text-sm italic">No expense data</div>
+            )}
           </div>
           <div className="mt-4 space-y-3">
             {categoryData.slice(0, 3).map((item, index) => (
@@ -166,10 +209,10 @@ export default function Home() {
         </div>
       </section>
 
-      {/* Recent Transactions */}
+      {/* Recent Activity */}
       <section className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
         <div className="px-6 py-5 border-b border-slate-100 flex justify-between items-center">
-          <h2 className="text-lg font-semibold text-slate-800">Recent Transactions</h2>
+          <h2 className="text-lg font-semibold text-slate-800">Recent Activity</h2>
           <span className="text-sm font-medium text-blue-600 hover:text-blue-700 cursor-pointer">View all</span>
         </div>
         <div className="overflow-x-auto">
@@ -192,18 +235,27 @@ export default function Home() {
                     <span className="font-semibold text-slate-900">{tx.merchant}</span>
                   </td>
                   <td className="px-6 py-4">
-                    <span className={clsx("px-2.5 py-1 rounded-full text-xs font-medium", tx.categoryColor)}>
+                    <span className={clsx("px-2.5 py-1 rounded-full text-xs font-medium", 
+                      tx.type === "income" ? "bg-green-100 text-green-700" : "bg-red-100 text-red-700"
+                    )}>
                       {tx.category}
                     </span>
                   </td>
-                  <td className="px-6 py-4 text-slate-500">
-                    {tx.date}
+                  <td className="px-6 py-4 text-slate-500 font-medium">
+                     {tx.type === "expense" ? (expenses.find(e => e.id === tx.id)?.date || "Today") : "Today"}
                   </td>
-                  <td className={clsx("px-6 py-4 text-right font-bold", tx.amountColor)}>
-                    {tx.amount > 0 ? "+" : ""}${Math.abs(tx.amount).toFixed(2)}
+                  <td className={clsx("px-6 py-4 text-right font-bold", 
+                    tx.type === "income" ? "text-green-600" : "text-red-600"
+                  )}>
+                    {tx.type === "income" ? "+" : "-"}{formatCurrency(tx.amount)}
                   </td>
                 </tr>
               ))}
+              {recentTransactions.length === 0 && (
+                <tr>
+                   <td colSpan={4} className="px-6 py-8 text-center text-slate-400 italic">No activity yet.</td>
+                </tr>
+              )}
             </tbody>
           </table>
         </div>
