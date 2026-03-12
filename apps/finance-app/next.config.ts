@@ -10,6 +10,14 @@ const withPWA = withPWAInit({
 const nextConfig: NextConfig = {
   basePath: "/finance",
   turbopack: {},
+  images: {
+    remotePatterns: [
+      {
+        protocol: "https",
+        hostname: "api.dicebear.com",
+      },
+    ],
+  },
 };
 
 export default withPWA(nextConfig);
