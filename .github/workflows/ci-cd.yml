@@ -46,8 +46,7 @@ jobs:
         run: pnpm turbo run lint
 
       - name: Type check
-        run: pnpm turbo run build --dry=json
-        continue-on-error: false
+        run: pnpm turbo run typecheck
 
       - name: Build
         run: pnpm turbo run build
@@ -95,8 +94,9 @@ jobs:
       - name: Check if ${{ matrix.app }} has changes (turbo-ignore)
         id: changes
         run: |
-          # turbo-ignore: exit 1 = có thay đổi, exit 0 = không có thay đổi
-          if ! npx turbo-ignore ${{ matrix.app }}; then
+          # turbo-ignore: exit 1 = có thay đổi → deploy
+          #               exit 0 = không có thay đổi → skip
+          if npx turbo-ignore ${{ matrix.app }}; then
             echo "skip=true" >> $GITHUB_OUTPUT
             echo "⏭️ No changes detected in ${{ matrix.app }}, skipping deploy."
           else
@@ -156,17 +156,33 @@ jobs:
       - name: Check if ${{ matrix.app }} has changes
         id: changes
         run: |
-          if ! npx turbo-ignore ${{ matrix.app }}; then
+          if npx turbo-ignore ${{ matrix.app }}; then
             echo "skip=true" >> $GITHUB_OUTPUT
+            echo "⏭️ No changes detected in ${{ matrix.app }}, skipping preview."
           else
             echo "skip=false" >> $GITHUB_OUTPUT
+            echo "✅ Changes detected in ${{ matrix.app }}, proceeding with preview."
           fi
 
       - name: Deploy ${{ matrix.app }} → Vercel (Preview)
         if: steps.changes.outputs.skip == 'false'
+        id: deploy
         run: |
-          npx vercel@latest deploy --yes \
-            --token=${{ secrets.VERCEL_TOKEN }}
+          DEPLOYMENT_URL=$(npx vercel@latest deploy --yes \
+            --token=${{ secrets.VERCEL_TOKEN }})
+          echo "url=$DEPLOYMENT_URL" >> $GITHUB_OUTPUT
         env:
           VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
           VERCEL_PROJECT_ID: ${{ secrets[matrix.project_id_secret] }}
+
+      - name: Comment Preview URL on PR
+        if: steps.changes.outputs.skip == 'false' && steps.deploy.outputs.url != ''
+        uses: actions/github-script@v7
+        with:
+          script: |
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: `👁️ **Preview deployed for \`${{ matrix.app }}\`**: ${{ steps.deploy.outputs.url }}`
+            })
